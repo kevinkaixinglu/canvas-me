@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CanvasME</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/handsfree@8.5.1/build/lib/assets/handsfree.css" />
+    <script src="https://unpkg.com/handsfree@8.5.1/build/lib/handsfree.js"></script>
+    
+    <style>
+        body {
+            display: flex;
+            flex-direction: column; 
+            background: linear-gradient(to left, #888888, #515151);
+            justify-content: center;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800; 
+            margin: 0.8%;
+            margin-bottom: 0;
+            font-size: 3vw;
+            color: #ffffff;
+        }
+
+        h1 span {
+            color: #6db581; 
+        }
+
+        #lowerPage {
+            display: flex;
+            justify-content: center;
+            height: 87vh;
+        }
+
+        #canvas-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        #canvas {
+            width: 100%; 
+            height: 100%; 
+            background-color: #ffffff;
+            display: block;
+            border-radius: 1%; 
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.6); 
+        }
+
+        #tracking-dot {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: rgba(150, 150, 150, 0.5);
+            border: 2px solid rgba(100, 100, 100, 0.7);
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            display: none;
+            z-index: 10;
+            transition: background-color 0.1s ease;
+        }
+
+        #tracking-dot.drawing {
+            background-color: rgba(109, 181, 129, 0.7);
+            border-color: rgba(80, 150, 100, 0.9);
+        }
+
+        #toolbar {
+            width: 5%; 
+            aspect-ratio: 0.4;
+            background-color: rgba(0, 0, 0, 0.4);
+            color: white; 
+            position: absolute; 
+            top: 1%;
+            right: 1%; 
+            z-index: 1;
+            border-radius: 0.5vw; 
+            display: flex; 
+            flex-direction: column;
+            justify-content: center; 
+            align-items: center; 
+            gap: 5%;
+            box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        #switchButton {
+            width: 15%; 
+            margin-bottom: 1%;
+            background-color: rgb(152, 180, 157);
+            border-radius: 2vw;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600; 
+            font-size: 70%;
+            color: #ffffff;
+        }
+
+        #switchButtonContainer {
+            display: flex;
+            justify-content: center; 
+        }   
+
+        #clearButton, #saveButton {
+            border-radius: 0.4vw;
+        }
+
+        #clearButton {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800; 
+            font-size: 70%;
+            color: #373737;
+            width: 4vw;
+            aspect-ratio: 1.8;
+            background-color: rgb(255, 255, 255);
+        }
+
+        #saveButton {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800; 
+            font-size: 70%;
+            color: #ffffff;
+            width: 4vw;
+            aspect-ratio: 1.8;
+            background-color: rgb(50, 50, 50);
+        }
+    </style>
+</head>
+<body>
+    <h1>Canvas<span>ME</span></h1>
+    <div id ="switchButtonContainer">
+        <button id="switchButton" onclick="redirectToCamera()">SWITCH TO CAMERA</button>
+    </div>
+    <div id="lowerPage">
+        <div id="canvas-container">
+            <canvas id="canvas"></canvas>
+            <div id="tracking-dot"></div>
+            <div id="toolbar">
+                <input type="color" id="color-picker" name="color" value="#ff0000">
+                <button id="clearButton">CLEAR</button>
+                <button id="saveButton">SAVE</button>
+            </div>
+        </div>
+        <div id="handsfree-debugger"></div>
+    </div>
+    <script>
+        function isFingerExtended(fingerBase, fingerTip) {
+            return fingerTip.y < fingerBase.y - 0.03; 
+        }
+
+        function isPointingGesture(landmarks) {
+            if (!landmarks || landmarks.length < 21) return false;
+
+            const indexBase = landmarks[5];
+            const indexTip = landmarks[8];
+            const middleBase = landmarks[9];
+            const middleTip = landmarks[12];
+            const ringBase = landmarks[13];
+            const ringTip = landmarks[16];
+            const pinkyBase = landmarks[17];
+            const pinkyTip = landmarks[20];
+            
+            const indexExtended = isFingerExtended(indexBase, indexTip);
+            const middleCurled = !isFingerExtended(middleBase, middleTip);
+            const ringCurled = !isFingerExtended(ringBase, ringTip);
+            const pinkyCurled = !isFingerExtended(pinkyBase, pinkyTip);
+            
+            return indexExtended && (middleCurled || ringCurled || pinkyCurled);
+        }
+
+        function redirectToCamera() {
+            window.location.href = "camera.html";
+        }
+
+        const handsfree = new Handsfree({
+            facemesh: {
+                enabled: true
+            },
+            hands: {
+                enabled: true,
+                maxNumHands: 1,
+                minDetectionConfidence: 0.6, 
+                minTrackingConfidence: 0.6 
+            },
+        });
+
+        handsfree.showDebugger();
+        handsfree.start();
+
+        const debuggerWindow = document.querySelector('.handsfree-debugger');
+        if (debuggerWindow) {
+            debuggerWindow.style.width = '15%'; 
+            debuggerWindow.style.position = 'absolute'; 
+            debuggerWindow.style.bottom = '5vh';
+            debuggerWindow.style.right = '2vw'; 
+            debuggerWindow.style.opacity = '0.6'; 
+            debuggerWindow.style.border = '5px solid rgba(109, 181, 129, 0.5)'; 
+            debuggerWindow.style.borderRadius = '0.3vw'; 
+        }
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const trackingDot = document.getElementById('tracking-dot');
+        let isDrawing = false;
+        let lastPosition = { x: 0, y: 0 };
+        let lastDotPosition = { x: 0, y: 0 };
+        let dotInitialized = false;
+        
+        const drawingSmoothingFactor = 0.15;  // For the actual drawing
+        const dotSmoothingFactor = 0.25;      // For the tracking dot (higher = more responsive)
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        function lerp(start, end, factor) {
+            return start + (end - start) * factor;
+        }
+
+        const colorPicker = document.getElementById('color-picker');
+
+        let drawingColor = colorPicker.value; 
+
+        colorPicker.addEventListener('input', function() {
+            drawingColor = colorPicker.value; 
+        });
+
+        function updateTrackingDot(x, y, isCurrentlyDrawing) {
+            // Initialize position on first detection
+            if (!dotInitialized) {
+                lastDotPosition = { x: x, y: y };
+                dotInitialized = true;
+            }
+            
+            // Smooth the dot position
+            const smoothX = lerp(lastDotPosition.x, x, dotSmoothingFactor);
+            const smoothY = lerp(lastDotPosition.y, y, dotSmoothingFactor);
+            
+            lastDotPosition = { x: smoothX, y: smoothY };
+            
+            trackingDot.style.display = 'block';
+            trackingDot.style.left = smoothX + 'px';
+            trackingDot.style.top = smoothY + 'px';
+            
+            if (isCurrentlyDrawing) {
+                trackingDot.classList.add('drawing');
+            } else {
+                trackingDot.classList.remove('drawing');
+            }
+        }
+
+        function hideTrackingDot() {
+            trackingDot.style.display = 'none';
+            dotInitialized = false;  // Reset so next detection starts fresh
+        }
+
+        function draw(x, y) {
+            if (!isDrawing) return;
+
+            const smoothX = lerp(lastPosition.x, x, drawingSmoothingFactor);
+            const smoothY = lerp(lastPosition.y, y, drawingSmoothingFactor);
+
+            ctx.lineWidth = 11;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = colorPicker.value;
+
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)'; 
+            ctx.shadowBlur = 10; 
+            ctx.shadowOffsetX = 5;  
+            ctx.shadowOffsetY = 5; 
+
+            ctx.beginPath();
+            ctx.moveTo(lastPosition.x, lastPosition.y);
+            ctx.lineTo(smoothX, smoothY);
+            ctx.stroke();
+
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+
+            lastPosition = { x: smoothX, y: smoothY };
+        }   
+
+        handsfree.on('data', (data) => {
+            if (data.hands && data.hands.landmarks) {
+                const hands = data.hands.landmarks;
+                let pointingDetected = false;
+                let handDetected = false;
+
+                hands.forEach((handLandmarks) => {
+                    if (handLandmarks && handLandmarks.length >= 21) {
+                        handDetected = true;
+                        const indexTip = handLandmarks[8];
+
+                        const debuggerWindowRect = debuggerWindow.getBoundingClientRect();
+                        const indexX = indexTip.x * debuggerWindowRect.width;
+                        const indexY = indexTip.y * debuggerWindowRect.height;
+
+                        const mirroredIndexX = debuggerWindowRect.width - indexX;
+
+                        const canvasRect = canvas.getBoundingClientRect();
+                        const canvasX = (mirroredIndexX / debuggerWindowRect.width) * canvasRect.width;
+                        const canvasY = (indexY / debuggerWindowRect.height) * canvasRect.height;
+
+                        // Always update tracking dot when hand is detected
+                        updateTrackingDot(canvasX, canvasY, isPointingGesture(handLandmarks));
+
+                        if (isPointingGesture(handLandmarks)) {
+                            pointingDetected = true;
+
+                            if (!isDrawing) {
+                                isDrawing = true;
+                                lastPosition = { x: canvasX, y: canvasY };
+                            }
+
+                            draw(canvasX, canvasY);
+                        }
+                    }
+                });
+
+                if (!handDetected) {
+                    hideTrackingDot();
+                }
+
+                if (!pointingDetected && isDrawing) {
+                    isDrawing = false;
+                }
+            } else {
+                hideTrackingDot();
+            }
+        });
+
+        const clearButton = document.getElementById('clearButton');
+        clearButton.addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        const saveButton = document.getElementById('saveButton');
+        saveButton.addEventListener('click', () => {
+            
+            const imageData = canvas.toDataURL('image/png'); 
+
+            localStorage.setItem('drawingData', imageData);
+
+            console.log(imageData);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CanvasME</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/handsfree@8.5.1/build/lib/assets/handsfree.css" />
+    <script src="https://unpkg.com/handsfree@8.5.1/build/lib/handsfree.js"></script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(to left, #888888, #515151);
+            justify-content: center;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800; 
+            margin: 0.8%; 
+            margin-bottom: 0;
+            font-size: 3vw;
+            color: #ffffff;
+        }
+
+        h1 span {
+            color: #6db581;
+        }
+
+        #lowerPage {
+            display: flex;
+            justify-content: center;
+            height: 87vh;
+        }
+
+        #video-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            background-color: #ffffff;
+            object-fit: cover;
+            transform: scaleX(-1);
+            display: block;
+            border-radius: 1%;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.6);
+        }
+
+        #video-container::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 1%; 
+            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+        }
+
+        #toolbar {
+            width: 5%; 
+            aspect-ratio: 0.35;
+            background-color: rgba(198, 198, 198, 0.4); 
+            color: white; 
+            position: absolute;
+            top: 1%; 
+            right: 1%;
+            z-index: 1;
+            border-radius: 0.5vw;
+            display: flex; 
+            flex-direction: column;
+            justify-content: center; 
+            align-items: center; 
+            gap: 5%;
+            box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2); 
+        }
+
+        #switchButton {
+            width: 15%;
+            margin-bottom: 1%;
+            background-color: rgb(152, 180, 157);
+            border-radius: 2vw;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600; 
+            font-size: 70%;
+            color: #ffffff;
+        }
+
+        #switchButtonContainer {
+            display: flex;
+            justify-content: center;
+        }
+
+        #drawingDiv {
+            width: 100%;
+            height: 500px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid #000;
+        }
+
+        #saved, #screenshot, #clear {
+            border-radius: 0.4vw;
+        }
+
+        #saved {
+            aspect-ratio: 1;
+            height: 6vh;
+            background-color: rgb(82, 82, 82);
+            color: #ffffff;
+            font-size: 200%;
+        }
+
+        #screenshot {
+            aspect-ratio: 1;
+            height: 6vh;
+            background-color: rgb(82, 82, 82);
+            color: #ffffff;
+            font-size: 200%;
+        }
+
+        #clear {
+            aspect-ratio: 1;
+            height: 6vh;
+            background-color: rgb(82, 82, 82);
+            color: #ffffff;
+            font-size: 70%;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800; 
+        }
+        
+        #saved-image {
+            position: absolute;
+            top: 10%; 
+            right: 10%; 
+            width: 70%; 
+            object-fit: contain;
+            z-index: 2;
+        }
+    </style>
+</head>
+<body>
+    <h1>Canvas<span>ME</span></h1>
+    <div id="switchButtonContainer">
+        <button id="switchButton" onclick="redirectToCanvas()">SWITCH TO CANVAS</button>
+    </div>
+    <div id="lowerPage">
+        <div id="video-container">
+            <video id="video" autoplay playsinline></video>
+            <div id="toolbar">
+                <button id="saved">
+                    <i class="fas fa-save"></i>
+                </button>
+                <button id="clear">CLEAR</button>
+                <button id="screenshot">
+                    <i class="fas fa-camera"></i>
+                </button>
+            </div>
+        </div>
+        <div id="handsfree-debugger"></div>
+    </div>
+    <script>
+        let isImageOnFace = false; 
+        let faceTrackingInterval;
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+        let savedImageElement = null;
+
+
+        let initialFacePosition = { x: 0, y: 0 }; 
+        let offsetX = 0;
+        let offsetY = 0;
+        
+        
+        function checkOverlap(rect1, rect2) {
+            return !(
+                rect1.right < rect2.left ||
+                rect1.left > rect2.right ||
+                rect1.bottom < rect2.top ||
+                rect1.top > rect2.bottom
+            );
+        }
+
+        function startVideo() {
+            const video = document.getElementById('video');
+            const constraints = {
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },  
+                    frameRate: { ideal: 60 } 
+                }
+            };
+
+            navigator.mediaDevices.getUserMedia(constraints)
+            .then((stream) => {
+                video.srcObject = stream;
+            })
+            .catch((err) => {
+                console.error("Error accessing the camera: ", err);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            startVideo(); 
+            console.log("DOM loaded - Checking localStorage");
+            const savedDrawingData = localStorage.getItem('drawingData');
+            console.log("Saved Drawing Data: ", savedDrawingData); 
+
+            if (savedDrawingData) {
+                console.log("Image found, creating img element...");
+                const drawingDiv = document.getElementById('drawingDiv');
+
+                const imageElement = new Image();
+                imageElement.src = savedDrawingData;
+
+                drawingDiv.appendChild(imageElement);
+            } else {
+                console.log("No drawing found in localStorage.");
+            }
+        });
+
+        function redirectToCanvas() {
+            window.location.href = "canvas.html";
+        }
+
+        const handsfree = new Handsfree({
+            facemesh: {
+                enabled: true
+            },
+            hands: {
+                enabled: true,
+                maxNumHands: 1,
+                minDetectionConfidence: 0.6,
+                minTrackingConfidence: 0.6
+            },
+        });
+
+        handsfree.showDebugger();
+        handsfree.start();
+
+        const debuggerWindow = document.querySelector('.handsfree-debugger');
+
+        if (debuggerWindow) {
+            debuggerWindow.style.width = '15%'; 
+            debuggerWindow.style.position = 'absolute'; 
+            debuggerWindow.style.bottom = '5vh';
+            debuggerWindow.style.right = '2vw'; 
+            debuggerWindow.style.opacity = '0.6'; 
+            debuggerWindow.style.border = '5px solid rgba(109, 181, 129, 0.5)'; 
+            debuggerWindow.style.borderRadius = '0.3vw';
+        }
+
+        const savedButton = document.getElementById('saved');
+        savedButton.addEventListener('click', () => {
+        const savedDrawingData = localStorage.getItem('drawingData');
+
+        if (savedDrawingData) {
+            console.log("Displaying saved image on top of the video.");
+
+            const existingSavedImage = document.getElementById('saved-image');
+            if (existingSavedImage) {
+                existingSavedImage.remove();
+            }
+
+            savedImageElement = new Image();
+            savedImageElement.src = savedDrawingData;
+
+            savedImageElement.id = 'saved-image';
+            savedImageElement.style.position = 'absolute';
+            savedImageElement.style.cursor = 'move';
+            savedImageElement.style.zIndex = '10';
+
+            const videoContainer = document.getElementById('video-container');
+            videoContainer.appendChild(savedImageElement);
+
+            savedImageElement.addEventListener('mousedown', dragStart);
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', dragEnd);
+            } else {
+                console.log("No saved image found.");
+            }
+        });
+
+        const clearButton = document.getElementById('clear');
+        clearButton.addEventListener('click', () => {
+            console.log("Clearing saved image...");
+            const savedImage = document.getElementById('saved-image');
+
+            if (savedImage) {
+                savedImage.remove();
+                savedImageElement = null;
+
+                document.removeEventListener('mousemove', drag);
+                document.removeEventListener('mouseup', dragEnd);
+
+                isDragging = false;
+                currentX = 0;
+                currentY = 0;
+                initialX = 0;
+                initialY = 0;
+                xOffset = 0;
+                yOffset = 0;
+                faceTrackingInterval = null;
+                isImageOnFace = false;
+                clearInterval(faceTrackingInterval);
+
+                console.log("Saved image removed.");
+            } else {
+                console.log("No saved image to remove.");
+            }
+        });
+
+        function dragStart(e) {
+            e.preventDefault();
+
+            if (isImageOnFace) {
+                clearInterval(faceTrackingInterval);
+                faceTrackingInterval = null;
+                isImageOnFace = false;
+                console.log("Face tracking disabled. Image is now free to move.");
+            }
+
+            initialX = e.clientX - xOffset;
+            initialY = e.clientY - yOffset;
+
+            if (e.target === savedImageElement) {
+                isDragging = true;
+            }
+        }
+
+        function drag(e) {
+            if (isDragging && savedImageElement) {
+                e.preventDefault();
+
+                currentX = e.clientX - initialX;
+                currentY = e.clientY - initialY;
+
+                xOffset = currentX;
+                yOffset = currentY;
+
+                setTranslate(currentX, currentY, savedImageElement);
+            }
+        }
+
+        function dragEnd(e) {
+        if (isDragging) {
+            initialX = currentX;
+            initialY = currentY;
+            isDragging = false;
+
+            const imageRect = savedImageElement.getBoundingClientRect();
+
+            const reducedImageRect = {
+                left: imageRect.left + (imageRect.width * 0.20),
+                top: imageRect.top,
+                right: imageRect.right - (imageRect.width * 0.20),
+                bottom: imageRect.bottom
+            };
+
+            if (handsfree.data?.facemesh?.multiFaceLandmarks?.[0]) {
+                const faceLandmarks = handsfree.data.facemesh.multiFaceLandmarks[0];
+
+                const faceX = Math.min(...faceLandmarks.map(pt => pt.x)) * window.innerWidth;
+                const faceY = Math.min(...faceLandmarks.map(pt => pt.y)) * window.innerHeight;
+                const faceWidth = (Math.max(...faceLandmarks.map(pt => pt.x)) - Math.min(...faceLandmarks.map(pt => pt.x))) * window.innerWidth;
+                const faceHeight = (Math.max(...faceLandmarks.map(pt => pt.y)) - Math.min(...faceLandmarks.map(pt => pt.y))) * window.innerHeight;
+
+                const faceRect = {
+                    left: faceX,
+                    top: faceY,
+                    right: faceX + faceWidth,
+                    bottom: faceY + faceHeight
+                };
+
+                    if (checkOverlap(reducedImageRect, faceRect)) {
+                        console.log("The dragged image overlaps with the face!");
+
+                        initialFacePosition = {
+                            x: faceX + (faceWidth * 0.5),
+                            y: faceY + (faceHeight * 0.5) 
+                        };
+
+                        offsetX = imageRect.left - initialFacePosition.x;
+                        offsetY = imageRect.top - initialFacePosition.y;
+
+                        isImageOnFace = true;
+                        trackFaceMovement(faceLandmarks); 
+                    } else {
+                        console.log("No overlap detected.");
+                    }
+                } else {
+                    console.log("No face detected.");
+                }
+            }
+        }
+
+        function trackFaceMovement(faceLandmarks) {
+            if (isImageOnFace && savedImageElement) {
+                const eyeIndex = 33;
+                let eyeX = faceLandmarks[eyeIndex].x * window.innerWidth;
+                const eyeY = faceLandmarks[eyeIndex].y * window.innerHeight;
+                eyeX = window.innerWidth - eyeX;
+
+                const targetX = eyeX + offsetX; 
+                const targetY = eyeY + offsetY;
+
+                setTranslate(targetX - savedImageElement.width / 2, targetY - savedImageElement.height / 2, savedImageElement);
+
+                if (!faceTrackingInterval) {
+                    faceTrackingInterval = setInterval(() => {
+                        if (handsfree.data?.facemesh?.multiFaceLandmarks?.[0]) {
+                            const newFaceLandmarks = handsfree.data.facemesh.multiFaceLandmarks[0];
+                            let newEyeX = newFaceLandmarks[eyeIndex].x * window.innerWidth;
+                            const newEyeY = newFaceLandmarks[eyeIndex].y * window.innerHeight;
+
+                            newEyeX = window.innerWidth - newEyeX;
+
+                            const newTargetX = newEyeX + offsetX;
+                            const newTargetY = newEyeY + offsetY;
+
+                            setTranslate(newTargetX - savedImageElement.width / 2, newTargetY - savedImageElement.height / 2, savedImageElement);
+                        }
+                    }, 50);
+                }
+            }
+        }
+
+        function setTranslate(xPos, yPos, el) {
+            el.style.transform = `translate3d(${xPos}px, ${yPos}px, 0)`;
+        }
+
+        const screenshotButton = document.getElementById('screenshot');
+        screenshotButton.addEventListener('click', takeScreenshot);
+
+        function takeScreenshot() {
+            const video = document.getElementById('video');
+            
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            ctx.scale(-1, 1); 
+            ctx.translate(-canvas.width, 0);
+
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            if (savedImageElement) {
+                const videoRect = video.getBoundingClientRect();
+                const imageRect = savedImageElement.getBoundingClientRect();
+
+                const imageX = imageRect.left - videoRect.left;
+                const imageY = imageRect.top - videoRect.top;
+
+                const scaleX = canvas.width / videoRect.width;
+                const scaleY = canvas.height / videoRect.height;
+
+                const scaledImageX = imageX * scaleX;
+                const scaledImageY = imageY * scaleY;
+
+                ctx.save(); 
+                ctx.scale(-1, 1);  
+                ctx.translate(-canvas.width, 0); 
+
+                ctx.drawImage(savedImageElement, scaledImageX, scaledImageY, savedImageElement.width * scaleX, savedImageElement.height * scaleY);
+                
+                ctx.restore(); 
+            }
+            const screenshotData = canvas.toDataURL('image/png');
+
+            const downloadLink = document.createElement('a');
+            downloadLink.href = screenshotData; 
+            downloadLink.download = 'screenshot_with_drawing.png';
+
+            downloadLink.click();
+        }
+    </script>
+</body>
+</html>
